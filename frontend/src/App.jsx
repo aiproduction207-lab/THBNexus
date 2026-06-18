@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 
+import ErrorBoundary from "./components/ErrorBoundary"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
 import VerifyOTP from "./pages/VerifyOTP"
@@ -17,21 +18,23 @@ import AdminDashboard from "./admin/AdminDashboard"
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify" element={<VerifyOTP />} />
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/verify-otp" element={<VerifyOTP />} />
 
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/deposit" element={<Deposit />} />
-        <Route path="/withdraw" element={<Withdraw />} />
-        <Route path="/trade-history" element={<TradeHistory />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/kyc" element={<KYC />} />
-        <Route path="/bot" element={<BotActivation />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/deposit" element={<Deposit />} />
+          <Route path="/withdraw" element={<Withdraw />} />
+          <Route path="/trade-history" element={<TradeHistory />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/kyc" element={<KYC />} />
+          <Route path="/bot" element={<BotActivation />} />
 
-        <Route path="/admin" element={<AdminDashboard />} />
-      </Routes>
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   )
 }

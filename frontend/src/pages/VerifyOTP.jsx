@@ -1,8 +1,10 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 
 function VerifyOTP() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const pending = location.state || {}
   const [otp, setOtp] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -12,17 +14,52 @@ function VerifyOTP() {
       return
     }
 
+    if (!pending.email || !pending.name || !pending.password) {
+      alert("Missing registration details")
+      navigate("/register", { replace: true })
+      return
+    }
+
     setLoading(true)
+
     try {
+      console.log("OTP verification request started", {
+        email: pending.email,
+        otp
+      })
+
       const res = await fetch("http://localhost:5000/api/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ otp })
+        body: JSON.stringify({
+          name: pending.name,
+          email: pending.email,
+          password: pending.password,
+          otp
+        })
       })
+
       const data = await res.json()
+      console.log("OTP verification response:", data)
+
       alert(data.message || (data.success ? "Account verified" : "Verification failed"))
-      if (data.success) navigate("/")
+
+      if (data.success && data.user) {
+        localStorage.setItem(
+          "thb_user",
+          JSON.stringify({
+            name: data.user.name || pending.name,
+            email: data.user.email || pending.email,
+            role: data.user.role || "user",
+            profile_picture: data.user.profile_picture || data.user.avatar || "",
+            user_id: data.user.id || null
+          })
+        )
+
+        navigate(data.user.role === "admin" ? "/admin" : "/dashboard", { replace: true })
+      }
     } catch (error) {
+      console.error("OTP verification error:", error)
       alert("Verification failed")
     } finally {
       setLoading(false)

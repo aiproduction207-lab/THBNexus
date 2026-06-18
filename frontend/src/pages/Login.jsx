@@ -1,6 +1,30 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
+function getSafeUser() {
+  let user = null
+
+  try {
+    const stored = localStorage.getItem("thb_user")
+
+    if (
+      stored &&
+      stored !== "undefined" &&
+      stored !== "null"
+    ) {
+      const parsed = JSON.parse(stored)
+      if (parsed && typeof parsed === "object") {
+        user = parsed
+      }
+    }
+  } catch (error) {
+    console.error("Failed to parse stored user:", error)
+    localStorage.removeItem("thb_user")
+  }
+
+  return user
+}
+
 function Login() {
   const navigate = useNavigate()
   const [email, setEmail] = useState("")
@@ -8,10 +32,10 @@ function Login() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const stored = localStorage.getItem("thb_user")
-    if (stored) {
-      const user = JSON.parse(stored)
-      navigate(user.role === "admin" ? "/admin" : "/dashboard")
+    const user = getSafeUser()
+
+    if (user?.email) {
+      navigate(user.role === "admin" ? "/admin" : "/dashboard", { replace: true })
     }
   }, [navigate])
 
@@ -24,22 +48,36 @@ function Login() {
     setLoading(true)
 
     try {
+      console.log("Login request started", { email })
+
       const res = await fetch("http://localhost:5000/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
       })
-      const data = await res.json()
 
-      if (data.success) {
-        localStorage.setItem("thb_user", JSON.stringify(data.user))
-        localStorage.setItem("thb_role", data.user.role)
-        navigate(data.user.role === "admin" ? "/admin" : "/dashboard")
+      const data = await res.json()
+      console.log("Login response:", data)
+
+      if (data.success && data.user) {
+        const normalizedUser = {
+          name: data.user.name || email,
+          email: data.user.email || email,
+          role: data.user.role || "user",
+          profile_picture: data.user.profile_picture || data.user.avatar || "",
+          user_id: data.user.id || null
+        }
+
+        localStorage.setItem("thb_user", JSON.stringify(normalizedUser))
+        localStorage.setItem("thb_role", normalizedUser.role)
+
+        navigate(normalizedUser.role === "admin" ? "/admin" : "/dashboard", { replace: true })
       } else {
         alert(data.message || "Login failed")
       }
     } catch (error) {
-      alert("Network error while logging in")
+      console.error("Login error:", error)
+      alert("Unable to connect to the server")
     } finally {
       setLoading(false)
     }

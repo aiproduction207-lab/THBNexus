@@ -1,31 +1,71 @@
 import { useEffect, useState } from "react"
 import Layout from "../components/Layout"
 
-function Profile() {
-  const stored = JSON.parse(localStorage.getItem("thb_user") || "null")
-  const email = stored?.email || ""
+function getSafeUser() {
+  let user = null
 
-  const [name, setName] = useState(stored?.name || "")
-  const [phone, setPhone] = useState(stored?.phone || "")
-  const [country, setCountry] = useState(stored?.country || "")
-  const [avatar, setAvatar] = useState(stored?.avatar || "")
+  try {
+    const stored = localStorage.getItem("thb_user")
+
+    if (
+      stored &&
+      stored !== "undefined" &&
+      stored !== "null"
+    ) {
+      const parsed = JSON.parse(stored)
+      if (parsed && typeof parsed === "object") {
+        user = parsed
+      }
+    }
+  } catch (error) {
+    console.error("Failed to parse stored user:", error)
+    localStorage.removeItem("thb_user")
+  }
+
+  return user
+}
+
+function Profile() {
+  const storedUser = getSafeUser()
+  const email = storedUser?.email || ""
+
+  const [name, setName] = useState(storedUser?.name || "")
+  const [phone, setPhone] = useState(storedUser?.phone || "")
+  const [country, setCountry] = useState(storedUser?.country || "")
+  const [avatar, setAvatar] = useState(storedUser?.profile_picture || storedUser?.avatar || "")
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const loadProfile = async () => {
       if (!email) return
-      const res = await fetch("http://localhost:5000/api/me", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      })
-      const data = await res.json()
-      if (data.success) {
-        setName(data.user.name || "")
-        setPhone(data.user.phone || "")
-        setCountry(data.user.country || "")
-        setAvatar(data.user.avatar || "")
-        localStorage.setItem("thb_user", JSON.stringify(data.user))
+      try {
+        const res = await fetch("http://localhost:5000/api/me", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        })
+        const data = await res.json()
+
+        if (data.success && data.user) {
+          setName(data.user.name || "")
+          setPhone(data.user.phone || "")
+          setCountry(data.user.country || "")
+          setAvatar(data.user.avatar || data.user.profile_picture || "")
+
+          const updatedUser = {
+            name: data.user.name || "",
+            email: data.user.email || email,
+            role: data.user.role || "user",
+            profile_picture: data.user.avatar || data.user.profile_picture || "",
+            user_id: data.user.id || null,
+            phone: data.user.phone || "",
+            country: data.user.country || ""
+          }
+
+          localStorage.setItem("thb_user", JSON.stringify(updatedUser))
+        }
+      } catch (error) {
+        console.error("Profile load error:", error)
       }
     }
     loadProfile()
@@ -52,10 +92,20 @@ function Profile() {
       })
       const data = await res.json()
       alert(data.message || (data.success ? "Profile updated" : "Update failed"))
-      if (data.success) {
-        localStorage.setItem("thb_user", JSON.stringify(data.user))
+      if (data.success && data.user) {
+        const updatedUser = {
+          name: data.user.name || name,
+          email: data.user.email || email,
+          role: data.user.role || "user",
+          profile_picture: data.user.avatar || data.user.profile_picture || avatar,
+          user_id: data.user.id || null,
+          phone: data.user.phone || phone,
+          country: data.user.country || country
+        }
+        localStorage.setItem("thb_user", JSON.stringify(updatedUser))
       }
     } catch (error) {
+      console.error("Profile save error:", error)
       alert("Profile update failed")
     } finally {
       setLoading(false)

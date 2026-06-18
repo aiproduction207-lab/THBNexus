@@ -1,9 +1,33 @@
 import { useEffect, useMemo, useState } from "react"
 import Layout from "../components/Layout"
 
+function getSafeUser() {
+  let user = null
+
+  try {
+    const stored = localStorage.getItem("thb_user")
+
+    if (
+      stored &&
+      stored !== "undefined" &&
+      stored !== "null"
+    ) {
+      const parsed = JSON.parse(stored)
+      if (parsed && typeof parsed === "object") {
+        user = parsed
+      }
+    }
+  } catch (error) {
+    console.error("Failed to parse stored user:", error)
+    localStorage.removeItem("thb_user")
+  }
+
+  return user
+}
+
 export default function Dashboard() {
-  const stored = JSON.parse(localStorage.getItem("thb_user") || "null")
-  const email = stored?.email || ""
+  const storedUser = getSafeUser()
+  const email = storedUser?.email || ""
 
   const [wallet, setWallet] = useState({ demo_balance: 0, real_balance: 0 })
   const [trades, setTrades] = useState([])

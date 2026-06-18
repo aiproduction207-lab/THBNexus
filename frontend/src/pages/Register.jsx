@@ -17,19 +17,28 @@ function Register() {
     setLoading(true)
 
     try {
-      const res = await fetch("http://localhost:5000/api/register", {
+      console.log("Register request started", { name, email })
+
+      const res = await fetch("http://localhost:5000/api/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password })
       })
+
       const data = await res.json()
-      alert(data.message)
+      console.log("Register response:", data)
+
+      alert(data.message || (data.success ? "OTP sent successfully" : "Unable to send OTP"))
 
       if (data.success) {
-        navigate("/")
+        navigate("/verify-otp", {
+          replace: true,
+          state: { name, email, password }
+        })
       }
     } catch (error) {
-      alert("Network error while registering")
+      console.error("Register error:", error)
+      alert("Unable to connect to the server")
     } finally {
       setLoading(false)
     }
@@ -64,7 +73,7 @@ function Register() {
         />
 
         <button onClick={register} disabled={loading} style={buttonStyle}>
-          {loading ? "Registering..." : "Create Account"}
+          {loading ? "Sending OTP..." : "Send OTP"}
         </button>
 
         <p style={{ textAlign: "center", marginTop: 16 }}>

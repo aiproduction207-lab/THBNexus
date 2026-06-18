@@ -1,24 +1,50 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 
+function getSafeUser() {
+  let user = null
+
+  try {
+    const stored = localStorage.getItem("thb_user")
+
+    if (
+      stored &&
+      stored !== "undefined" &&
+      stored !== "null"
+    ) {
+      const parsed = JSON.parse(stored)
+      if (parsed && typeof parsed === "object") {
+        user = parsed
+      }
+    }
+  } catch (error) {
+    console.error("Failed to parse stored user:", error)
+    localStorage.removeItem("thb_user")
+  }
+
+  return user
+}
+
 export default function Layout({ children }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [user, setUser] = useState(null)
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem("thb_user") || "null")
-    if (!stored) {
-      navigate("/")
+    const storedUser = getSafeUser()
+
+    if (!storedUser?.email) {
+      navigate("/", { replace: true })
       return
     }
-    setUser(stored)
+
+    setUser(storedUser)
   }, [navigate])
 
   const logout = () => {
     localStorage.removeItem("thb_user")
     localStorage.removeItem("thb_role")
-    navigate("/")
+    navigate("/", { replace: true })
   }
 
   const navItems = [
@@ -73,11 +99,11 @@ export default function Layout({ children }) {
           <div />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontWeight: 700 }}>{user?.name || "User"}</div>
+              <div style={{ fontWeight: 700 }}>{user?.name || "Guest"}</div>
               <div style={{ fontSize: 12, color: "#64748b" }}>{user?.email || ""}</div>
             </div>
             <div style={{ width: 48, height: 48, borderRadius: 999, background: "linear-gradient(90deg, #22c55e, #3b82f6)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700 }}>
-              {user?.name?.charAt(0)?.toUpperCase() || "U"}
+              {(user?.name || "G").charAt(0).toUpperCase()}
             </div>
           </div>
         </header>
