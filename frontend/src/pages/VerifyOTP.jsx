@@ -39,6 +39,10 @@ function VerifyOTP() {
         })
       })
 
+      if (!res.ok) {
+        throw new Error("Server returned " + res.status)
+      }
+
       const data = await res.json()
       console.log("OTP verification response:", data)
 

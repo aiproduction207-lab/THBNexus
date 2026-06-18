@@ -6,6 +6,13 @@ const bcrypt = require("bcrypt")
 const app = express()
 app.use(cors())
 app.use(express.json())
+app.use((req, res, next) => {
+  console.log("REQUEST", req.method, req.originalUrl)
+  if (Object.keys(req.body || {}).length) {
+    console.log("REQUEST BODY", req.body)
+  }
+  next()
+})
 
 const db = new sqlite3.Database("./nexus.db")
 
@@ -70,6 +77,23 @@ const strategyStats = {
   SNIPER: { rate: 0.6, min: 1, max: 3 }
 }
 let bots = {}
+const pendingRegistrations = new Map()
+
+const generateOTP = () => String(Math.floor(100000 + Math.random() * 900000))
+
+const createPendingRegistration = async (email, name, password) => {
+  const passwordHash = await bcrypt.hash(password, 10)
+  const otp = generateOTP()
+  pendingRegistrations.set(email, {
+    email,
+    name,
+    passwordHash,
+    otp,
+    expiresAt: Date.now() + 5 * 60 * 1000
+  })
+  console.log("OTP GENERATED", { email, otp })
+  return otp
+}
 
 const initDb = async () => {
   await dbRun(`
@@ -156,17 +180,18 @@ initDb().catch((err) => {
 
 app.post("/api/register", async (req, res) => {
   try {
+    console.log("REGISTER REQUEST", req.body)
     const { name, email, password } = req.body
 
     if (!name || !email || !password) {
-      return res.json({ success: false, message: "Please fill all fields" })
+      return res.status(400).json({ success: false, message: "Please fill all fields" })
     }
 
     const emailLower = String(email).trim().toLowerCase()
     const existing = await dbGet("SELECT id FROM users WHERE email = ?", [emailLower])
 
     if (existing) {
-      return res.json({ success: false, message: "Email already registered" })
+      return res.status(409).json({ success: false, message: "Email already registered" })
     }
 
     const hashed = await bcrypt.hash(password, 10)
@@ -177,38 +202,114 @@ app.post("/api/register", async (req, res) => {
 
     return res.json({ success: true, message: "Account created successfully" })
   } catch (error) {
-    console.error(error)
-    return res.json({ success: false, message: "Registration failed" })
+    console.error("REGISTER ERROR", error)
+    return res.status(500).json({ success: false, message: "Registration failed" })
+  }
+})
+
+app.post("/api/send-otp", async (req, res) => {
+  try {
+    console.log("SEND OTP REQUEST", req.body)
+    const { name, email, password } = req.body
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: "Please fill all fields" })
+    }
+
+    const emailLower = String(email).trim().toLowerCase()
+    const existing = await dbGet("SELECT id FROM users WHERE email = ?", [emailLower])
+
+    if (existing) {
+      return res.status(409).json({ success: false, message: "Email already registered" })
+    }
+
+    const otp = await createPendingRegistration(emailLower, String(name).trim(), password)
+
+    return res.json({
+      success: true,
+      message: "OTP sent successfully",
+      otp
+    })
+  } catch (error) {
+    console.error("SEND OTP ERROR", error)
+    return res.status(500).json({ success: false, message: "Unable to send OTP" })
+  }
+})
+
+app.post("/api/verify-otp", async (req, res) => {
+  try {
+    console.log("VERIFY OTP REQUEST", req.body)
+    const { name, email, password, otp } = req.body
+    const emailLower = String(email || "").trim().toLowerCase()
+
+    if (!name || !emailLower || !password || !otp) {
+      return res.status(400).json({ success: false, message: "Missing verification details" })
+    }
+
+    const pending = pendingRegistrations.get(emailLower)
+    if (!pending || pending.expiresAt < Date.now()) {
+      pendingRegistrations.delete(emailLower)
+      return res.status(400).json({ success: false, message: "OTP expired or invalid" })
+    }
+
+    if (String(pending.otp) !== String(otp)) {
+      return res.status(400).json({ success: false, message: "Invalid OTP" })
+    }
+
+    const existing = await dbGet("SELECT id FROM users WHERE email = ?", [emailLower])
+    if (existing) {
+      pendingRegistrations.delete(emailLower)
+      return res.status(409).json({ success: false, message: "Email already registered" })
+    }
+
+    await dbRun(
+      "INSERT INTO users (name, email, password, demo_balance, real_balance) VALUES (?, ?, ?, 2000, 0)",
+      [pending.name, emailLower, pending.passwordHash]
+    )
+
+    pendingRegistrations.delete(emailLower)
+
+    const createdUser = await dbGet("SELECT * FROM users WHERE email = ?", [emailLower])
+
+    return res.json({
+      success: true,
+      message: "Account verified successfully",
+      user: sanitizeUser(createdUser)
+    })
+  } catch (error) {
+    console.error("VERIFY OTP ERROR", error)
+    return res.status(500).json({ success: false, message: "Verification failed" })
   }
 })
 
 app.post("/api/login", async (req, res) => {
   try {
+    console.log("LOGIN REQUEST", req.body)
     const { email, password } = req.body
     const emailLower = String(email || "").trim().toLowerCase()
 
     if (!emailLower || !password) {
-      return res.json({ success: false, message: "Email and password are required" })
+      return res.status(400).json({ success: false, message: "Email and password are required" })
     }
 
     const user = await dbGet("SELECT * FROM users WHERE email = ?", [emailLower])
     if (!user) {
-      return res.json({ success: false, message: "Invalid login credentials" })
+      return res.status(401).json({ success: false, message: "Invalid login credentials" })
     }
 
     const match = await bcrypt.compare(password, user.password)
     if (!match) {
-      return res.json({ success: false, message: "Invalid login credentials" })
+      return res.status(401).json({ success: false, message: "Invalid login credentials" })
     }
 
     if (Number(user.is_blocked) === 1) {
-      return res.json({ success: false, message: "Your account has been blocked" })
+      return res.status(403).json({ success: false, message: "Your account has been blocked" })
     }
 
     return res.json({ success: true, user: sanitizeUser(user) })
   } catch (error) {
-    console.error(error)
-    return res.json({ success: false, message: "Login failed" })
+    console.error("LOGIN ERROR", error)
+    return res.status(500).json({ success: false, message: "Login failed" })
   }
 })
 
@@ -682,6 +783,21 @@ app.get("/api/admin/summary", async (req, res) => {
     console.error(error)
     return res.json({ success: false, message: "Failed to load admin summary" })
   }
+})
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found"
+  })
+})
+
+app.use((err, req, res, next) => {
+  console.error("UNHANDLED ERROR", err)
+  res.status(500).json({
+    success: false,
+    message: "Server error"
+  })
 })
 
 app.listen(5000, () => {

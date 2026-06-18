@@ -25,6 +25,10 @@ function Register() {
         body: JSON.stringify({ name, email, password })
       })
 
+      if (!res.ok) {
+        throw new Error("Server returned " + res.status)
+      }
+
       const data = await res.json()
       console.log("Register response:", data)
 
