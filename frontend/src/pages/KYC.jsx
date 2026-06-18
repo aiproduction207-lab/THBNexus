@@ -13,7 +13,7 @@ function KYC() {
     if (!email) return
     setLoading(true)
     try {
-      const res = await fetch("http://localhost:5000/api/kyc", {
+      const res = await fetch("https://thbnexus.onrender.com/api/kyc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, document_type: documentType, country })

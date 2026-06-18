@@ -9,7 +9,7 @@ function BotActivation() {
   const [speed, setSpeed] = useState(5000)
 
   const startBot = async () => {
-    await fetch("http://localhost:5000/api/bot/start", {
+    await fetch("https://thbnexus.onrender.com/api/bot/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
@@ -19,7 +19,7 @@ function BotActivation() {
   }
 
   const stopBot = async () => {
-    await fetch("http://localhost:5000/api/bot/stop", {
+    await fetch("https://thbnexus.onrender.com/api/bot/stop", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })

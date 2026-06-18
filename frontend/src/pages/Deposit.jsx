@@ -18,7 +18,7 @@ function Deposit() {
 
     setLoading(true)
     try {
-      const res = await fetch("http://localhost:5000/api/deposit", {
+      const res = await fetch("https://thbnexus.onrender.com/api/deposit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

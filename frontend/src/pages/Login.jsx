@@ -50,7 +50,7 @@ function Login() {
     try {
       console.log("Login request started", { email })
 
-      const res = await fetch("http://localhost:5000/api/login", {
+      const res = await fetch("https://thbnexus.onrender.com/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })

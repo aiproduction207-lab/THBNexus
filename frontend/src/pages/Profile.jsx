@@ -39,7 +39,7 @@ function Profile() {
     const loadProfile = async () => {
       if (!email) return
       try {
-        const res = await fetch("http://localhost:5000/api/me", {
+        const res = await fetch("https://thbnexus.onrender.com/api/me", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email })
@@ -85,7 +85,7 @@ function Profile() {
     if (!email) return
     setLoading(true)
     try {
-      const res = await fetch("http://localhost:5000/api/profile", {
+      const res = await fetch("https://thbnexus.onrender.com/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, name, phone, country, avatar })

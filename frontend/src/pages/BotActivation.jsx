@@ -13,7 +13,7 @@ export default function BotActivation() {
 
   const loadTrades = async () => {
     if (!email) return
-    const res = await fetch("http://localhost:5000/api/trades", {
+    const res = await fetch("https://thbnexus.onrender.com/api/trades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
@@ -24,7 +24,7 @@ export default function BotActivation() {
 
   const loadWallet = async () => {
     if (!email) return
-    const res = await fetch("http://localhost:5000/api/wallet", {
+    const res = await fetch("https://thbnexus.onrender.com/api/wallet", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
@@ -40,7 +40,7 @@ export default function BotActivation() {
 
   const start = async () => {
     if (!email) return
-    const res = await fetch("http://localhost:5000/api/bot/start", {
+    const res = await fetch("https://thbnexus.onrender.com/api/bot/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, mode, strategy })
@@ -52,7 +52,7 @@ export default function BotActivation() {
 
   const stop = async () => {
     if (!email) return
-    const res = await fetch("http://localhost:5000/api/bot/stop", {
+    const res = await fetch("https://thbnexus.onrender.com/api/bot/stop", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })

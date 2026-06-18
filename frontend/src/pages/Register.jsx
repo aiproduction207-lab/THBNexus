@@ -19,7 +19,7 @@ function Register() {
     try {
       console.log("Register request started", { name, email })
 
-      const res = await fetch("http://localhost:5000/api/send-otp", {
+      const res = await fetch("https://thbnexus.onrender.com/api/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password })

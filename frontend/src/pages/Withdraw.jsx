@@ -18,7 +18,7 @@ function Withdraw() {
 
     setLoading(true)
     try {
-      const res = await fetch("http://localhost:5000/api/withdraw", {
+      const res = await fetch("https://thbnexus.onrender.com/api/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, amount: Number(amount), mode })

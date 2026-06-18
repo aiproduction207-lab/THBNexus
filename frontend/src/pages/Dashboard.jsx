@@ -34,7 +34,7 @@ export default function Dashboard() {
 
   const loadWallet = async () => {
     if (!email) return
-    const res = await fetch("http://localhost:5000/api/wallet", {
+    const res = await fetch("https://thbnexus.onrender.com/api/wallet", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })
@@ -50,7 +50,7 @@ export default function Dashboard() {
 
   const loadTrades = async () => {
     if (!email) return
-    const res = await fetch("http://localhost:5000/api/trades", {
+    const res = await fetch("https://thbnexus.onrender.com/api/trades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })

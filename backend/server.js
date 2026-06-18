@@ -4,6 +4,8 @@ const sqlite3 = require("sqlite3").verbose()
 const bcrypt = require("bcrypt")
 
 const app = express()
+const PORT = process.env.PORT || 5000
+
 app.use(cors())
 app.use(express.json())
 app.use((req, res, next) => {
@@ -306,7 +308,14 @@ app.post("/api/login", async (req, res) => {
       return res.status(403).json({ success: false, message: "Your account has been blocked" })
     }
 
-    return res.json({ success: true, user: sanitizeUser(user) })
+    const safeUser = sanitizeUser(user)
+    return res.json({
+      success: true,
+      email: safeUser.email,
+      role: safeUser.role,
+      token: `token-${safeUser.email}`,
+      user: safeUser
+    })
   } catch (error) {
     console.error("LOGIN ERROR", error)
     return res.status(500).json({ success: false, message: "Login failed" })
@@ -800,6 +809,6 @@ app.use((err, req, res, next) => {
   })
 })
 
-app.listen(5000, () => {
-  console.log("THB Nexus running on http://localhost:5000")
+app.listen(PORT, () => {
+  console.log(`THB Nexus running on port ${PORT}`)
 })

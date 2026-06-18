@@ -17,25 +17,25 @@ function AdminDashboard() {
   })
 
   const fetchUsers = async () => {
-    const res = await fetch("http://localhost:5000/api/admin/users")
+    const res = await fetch("https://thbnexus.onrender.com/api/admin/users")
     const data = await res.json()
     if (data.success) setUsers(data.users)
   }
 
   const fetchTradeLogs = async () => {
-    const res = await fetch("http://localhost:5000/api/admin/trades")
+    const res = await fetch("https://thbnexus.onrender.com/api/admin/trades")
     const data = await res.json()
     if (data.success) setTradeLogs(data.trades)
   }
 
   const fetchSummary = async () => {
-    const res = await fetch("http://localhost:5000/api/admin/summary")
+    const res = await fetch("https://thbnexus.onrender.com/api/admin/summary")
     const data = await res.json()
     if (data.success) setSummary(data.summary)
   }
 
   const creditUser = async () => {
-    const res = await fetch("http://localhost:5000/api/admin/credit", {
+    const res = await fetch("https://thbnexus.onrender.com/api/admin/credit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, amount: Number(amount), type })
@@ -47,7 +47,7 @@ function AdminDashboard() {
   }
 
   const deleteUser = async (targetEmail) => {
-    const res = await fetch("http://localhost:5000/api/admin/delete-user", {
+    const res = await fetch("https://thbnexus.onrender.com/api/admin/delete-user", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: targetEmail })
@@ -60,7 +60,7 @@ function AdminDashboard() {
   }
 
   const toggleBlockUser = async (targetEmail, blocked) => {
-    const res = await fetch("http://localhost:5000/api/admin/block-user", {
+    const res = await fetch("https://thbnexus.onrender.com/api/admin/block-user", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: targetEmail, blocked: !blocked })
