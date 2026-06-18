@@ -39,6 +39,7 @@ const isValidAmount = (value) => {
 }
 
 const getModeColumn = (mode) => (mode === "real" ? "real_balance" : "demo_balance")
+const normalizeMode = (mode) => (mode === "real" ? "real" : "demo")
 
 const sanitizeUser = (user) => ({
   id: user.id,
@@ -47,6 +48,7 @@ const sanitizeUser = (user) => ({
   role: user.email === "thbnexus@gmail.com" ? "admin" : "user",
   demo_balance: Number(user.demo_balance || 0),
   real_balance: Number(user.real_balance || 0),
+  avatar: user.avatar || "",
   is_blocked: Number(user.is_blocked || 0),
   kyc_status: user.kyc_status || "pending",
   phone: user.phone || "",
@@ -54,9 +56,19 @@ const sanitizeUser = (user) => ({
   document_type: user.document_type || ""
 })
 
-const normalizeMode = (mode) => (mode === "real" ? "real" : "demo")
+const ensureColumn = async (table, column, definition) => {
+  const columns = await dbAll(`PRAGMA table_info(${table})`)
+  if (!columns.some((entry) => entry.name === column)) {
+    await dbRun(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+}
 
 const BOT_INTERVAL = 3500
+const strategyStats = {
+  SAFE: { rate: 0.9, min: 1, max: 4 },
+  AGGRESSIVE: { rate: 0.75, min: 1, max: 5 },
+  SNIPER: { rate: 0.6, min: 1, max: 3 }
+}
 let bots = {}
 
 const initDb = async () => {
@@ -68,6 +80,7 @@ const initDb = async () => {
       password TEXT,
       demo_balance REAL DEFAULT 2000,
       real_balance REAL DEFAULT 0,
+      avatar TEXT,
       is_blocked INTEGER DEFAULT 0,
       kyc_status TEXT DEFAULT 'pending',
       phone TEXT,
@@ -81,12 +94,48 @@ const initDb = async () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT,
       mode TEXT,
+      strategy TEXT,
+      account_type TEXT,
       result TEXT,
       amount REAL,
       profit REAL,
+      profit_loss REAL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `)
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS deposit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT,
+      amount REAL,
+      mode TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS withdrawal_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT,
+      amount REAL,
+      mode TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  await ensureColumn("users", "password", "TEXT")
+  await ensureColumn("users", "demo_balance", "REAL DEFAULT 2000")
+  await ensureColumn("users", "real_balance", "REAL DEFAULT 0")
+  await ensureColumn("users", "avatar", "TEXT")
+  await ensureColumn("users", "is_blocked", "INTEGER DEFAULT 0")
+  await ensureColumn("users", "kyc_status", "TEXT DEFAULT 'pending'")
+  await ensureColumn("users", "phone", "TEXT")
+  await ensureColumn("users", "country", "TEXT")
+  await ensureColumn("users", "document_type", "TEXT")
+  await ensureColumn("trades", "strategy", "TEXT")
+  await ensureColumn("trades", "account_type", "TEXT")
+  await ensureColumn("trades", "profit_loss", "REAL")
 
   const admin = await dbGet("SELECT email FROM users WHERE email = ?", [
     "thbnexus@gmail.com"
@@ -95,8 +144,8 @@ const initDb = async () => {
   if (!admin) {
     const passwordHash = await bcrypt.hash("admin123", 10)
     await dbRun(
-      "INSERT INTO users (name, email, password, demo_balance, real_balance) VALUES (?, ?, ?, ?, ?)",
-      ["Admin", "thbnexus@gmail.com", passwordHash, 5000, 5000]
+      "INSERT INTO users (name, email, password, demo_balance, real_balance, kyc_status) VALUES (?, ?, ?, ?, ?, ?)",
+      ["Admin", "thbnexus@gmail.com", passwordHash, 5000, 5000, "approved"]
     )
   }
 }
@@ -143,7 +192,6 @@ app.post("/api/login", async (req, res) => {
     }
 
     const user = await dbGet("SELECT * FROM users WHERE email = ?", [emailLower])
-
     if (!user) {
       return res.json({ success: false, message: "Invalid login credentials" })
     }
@@ -157,10 +205,7 @@ app.post("/api/login", async (req, res) => {
       return res.json({ success: false, message: "Your account has been blocked" })
     }
 
-    return res.json({
-      success: true,
-      user: sanitizeUser(user)
-    })
+    return res.json({ success: true, user: sanitizeUser(user) })
   } catch (error) {
     console.error(error)
     return res.json({ success: false, message: "Login failed" })
@@ -231,7 +276,6 @@ app.post("/api/deposit", async (req, res) => {
 
     const column = getModeColumn(selectedMode)
     const user = await dbGet("SELECT * FROM users WHERE email = ?", [emailLower])
-
     if (!user) {
       return res.json({ success: false, message: "User not found" })
     }
@@ -240,6 +284,10 @@ app.post("/api/deposit", async (req, res) => {
       Number(amount),
       emailLower
     ])
+    await dbRun(
+      "INSERT INTO deposit_logs (email, amount, mode) VALUES (?, ?, ?)",
+      [emailLower, Number(amount), selectedMode]
+    )
 
     const updated = await dbGet(
       "SELECT demo_balance, real_balance FROM users WHERE email = ?",
@@ -272,7 +320,6 @@ app.post("/api/withdraw", async (req, res) => {
     const user = await dbGet(`SELECT ${column} AS balance FROM users WHERE email = ?`, [
       emailLower
     ])
-
     if (!user || Number(user.balance || 0) < Number(amount)) {
       return res.json({ success: false, message: "Insufficient balance" })
     }
@@ -281,6 +328,10 @@ app.post("/api/withdraw", async (req, res) => {
       Number(amount),
       emailLower
     ])
+    await dbRun(
+      "INSERT INTO withdrawal_logs (email, amount, mode) VALUES (?, ?, ?)",
+      [emailLower, Number(amount), selectedMode]
+    )
 
     const updated = await dbGet(
       "SELECT demo_balance, real_balance FROM users WHERE email = ?",
@@ -301,7 +352,7 @@ app.post("/api/withdraw", async (req, res) => {
 
 app.post("/api/profile", async (req, res) => {
   try {
-    const { email, name, phone, country } = req.body
+    const { email, name, phone, country, avatar } = req.body
     const emailLower = String(email || "").trim().toLowerCase()
 
     if (!emailLower) {
@@ -309,11 +360,12 @@ app.post("/api/profile", async (req, res) => {
     }
 
     await dbRun(
-      "UPDATE users SET name = ?, phone = ?, country = ? WHERE email = ?",
+      "UPDATE users SET name = ?, phone = ?, country = ?, avatar = ? WHERE email = ?",
       [
         String(name || "").trim(),
         String(phone || "").trim(),
         String(country || "").trim(),
+        String(avatar || ""),
         emailLower
       ]
     )
@@ -336,7 +388,7 @@ app.post("/api/kyc", async (req, res) => {
     }
 
     await dbRun(
-      "UPDATE users SET document_type = ?, country = ?, kyc_status = 'review' WHERE email = ?",
+      "UPDATE users SET document_type = ?, country = ?, kyc_status = 'pending' WHERE email = ?",
       [String(document_type || "").trim(), String(country || "").trim(), emailLower]
     )
 
@@ -349,9 +401,10 @@ app.post("/api/kyc", async (req, res) => {
 
 app.post("/api/bot/start", async (req, res) => {
   try {
-    const { email, mode } = req.body
+    const { email, mode, strategy } = req.body
     const emailLower = String(email || "").trim().toLowerCase()
     const selectedMode = normalizeMode(mode)
+    const selectedStrategy = strategy || "SAFE"
 
     if (!emailLower) {
       return res.json({ success: false, message: "Email is required" })
@@ -372,17 +425,18 @@ app.post("/api/bot/start", async (req, res) => {
 
     bots[emailLower] = {
       mode: selectedMode,
+      strategy: selectedStrategy,
       interval: setInterval(async () => {
         try {
-          const current = await dbGet(
-            "SELECT * FROM users WHERE email = ?",
-            [emailLower]
-          )
+          const current = await dbGet("SELECT * FROM users WHERE email = ?", [emailLower])
           if (!current) return
 
-          const amount = Number((Math.random() * 4 + 1).toFixed(2))
-          const isWin = Math.random() < 0.85
-          const multiplier = 1.5 + Math.random() * 0.5
+          const config = strategyStats[selectedStrategy.toUpperCase()] || strategyStats.SAFE
+          const amount = Number(
+            (Math.random() * (config.max - config.min) + config.min).toFixed(2)
+          )
+          const isWin = Math.random() < config.rate
+          const multiplier = isWin ? 1.5 + Math.random() * 0.5 : 1
           const profit = isWin
             ? Number((amount * multiplier).toFixed(2))
             : -Number(amount.toFixed(2))
@@ -392,13 +446,17 @@ app.post("/api/bot/start", async (req, res) => {
             profit,
             emailLower
           ])
+
           await dbRun(
-            "INSERT INTO trades (email, mode, result, amount, profit) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO trades (email, mode, strategy, account_type, result, amount, profit, profit_loss) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
               emailLower,
               bots[emailLower]?.mode || selectedMode,
+              bots[emailLower]?.strategy || selectedStrategy,
+              bots[emailLower]?.mode || selectedMode,
               isWin ? "WIN" : "LOSS",
               amount,
+              profit,
               profit
             ]
           )
@@ -442,11 +500,18 @@ app.post("/api/trades", async (req, res) => {
     }
 
     const rows = await dbAll(
-      "SELECT * FROM trades WHERE email = ? ORDER BY id DESC LIMIT 50",
+      "SELECT id, email, mode, strategy, account_type, result, amount, profit, profit_loss, created_at FROM trades WHERE email = ? ORDER BY id DESC LIMIT 50",
       [emailLower]
     )
 
-    return res.json({ success: true, trades: rows })
+    return res.json({
+      success: true,
+      trades: rows.map((row) => ({
+        ...row,
+        profit_loss: Number(row.profit_loss || row.profit || 0),
+        profit: Number(row.profit || row.profit_loss || 0)
+      }))
+    })
   } catch (error) {
     console.error(error)
     return res.json({ success: false, message: "Trade history failed" })
@@ -456,7 +521,7 @@ app.post("/api/trades", async (req, res) => {
 app.get("/api/admin/users", async (req, res) => {
   try {
     const users = await dbAll(
-      "SELECT id, name, email, demo_balance, real_balance, is_blocked, kyc_status FROM users ORDER BY id ASC"
+      "SELECT id, name, email, demo_balance, real_balance, is_blocked, kyc_status, document_type, avatar FROM users ORDER BY id ASC"
     )
     return res.json({
       success: true,
@@ -505,6 +570,8 @@ app.post("/api/admin/delete-user", async (req, res) => {
     }
 
     await dbRun("DELETE FROM trades WHERE email = ?", [emailLower])
+    await dbRun("DELETE FROM deposit_logs WHERE email = ?", [emailLower])
+    await dbRun("DELETE FROM withdrawal_logs WHERE email = ?", [emailLower])
     await dbRun("DELETE FROM users WHERE email = ?", [emailLower])
 
     return res.json({ success: true, message: "User deleted" })
@@ -538,15 +605,82 @@ app.post("/api/admin/block-user", async (req, res) => {
   }
 })
 
+app.post("/api/admin/update-kyc", async (req, res) => {
+  try {
+    const { email, status } = req.body
+    const emailLower = String(email || "").trim().toLowerCase()
+    const nextStatus = status || "pending"
+
+    if (!emailLower) {
+      return res.json({ success: false, message: "Email is required" })
+    }
+
+    await dbRun("UPDATE users SET kyc_status = ? WHERE email = ?", [
+      nextStatus,
+      emailLower
+    ])
+
+    return res.json({ success: true, message: "KYC status updated" })
+  } catch (error) {
+    console.error(error)
+    return res.json({ success: false, message: "KYC update failed" })
+  }
+})
+
 app.get("/api/admin/trades", async (req, res) => {
   try {
     const rows = await dbAll(
-      "SELECT id, email, mode, result, amount, profit, created_at FROM trades ORDER BY id DESC LIMIT 100"
+      "SELECT id, email, mode, strategy, account_type, result, amount, profit, profit_loss, created_at FROM trades ORDER BY id DESC LIMIT 120"
     )
-    return res.json({ success: true, trades: rows })
+    return res.json({
+      success: true,
+      trades: rows.map((row) => ({
+        ...row,
+        profit_loss: Number(row.profit_loss || row.profit || 0),
+        profit: Number(row.profit || row.profit_loss || 0)
+      }))
+    })
   } catch (error) {
     console.error(error)
     return res.json({ success: false, message: "Failed to load trade logs" })
+  }
+})
+
+app.get("/api/admin/summary", async (req, res) => {
+  try {
+    const users = await dbAll(
+      "SELECT id, email, demo_balance, real_balance, kyc_status, is_blocked FROM users"
+    )
+    const trades = await dbAll(
+      "SELECT id, email, result, amount, profit, profit_loss, created_at FROM trades"
+    )
+    const deposits = await dbAll(
+      "SELECT id, email, amount, mode, created_at FROM deposit_logs ORDER BY id DESC LIMIT 8"
+    )
+    const withdrawals = await dbAll(
+      "SELECT id, email, amount, mode, created_at FROM withdrawal_logs ORDER BY id DESC LIMIT 8"
+    )
+
+    const totalPlatformProfit = trades.reduce(
+      (sum, trade) => sum + Number(trade.profit_loss || trade.profit || 0),
+      0
+    )
+
+    return res.json({
+      success: true,
+      summary: {
+        totalUsers: users.length,
+        totalTrades: trades.length,
+        activeBots: Object.keys(bots).length,
+        totalPlatformProfit,
+        recentTrades: trades.slice(0, 8),
+        recentDeposits: deposits,
+        recentWithdrawals: withdrawals
+      }
+    })
+  } catch (error) {
+    console.error(error)
+    return res.json({ success: false, message: "Failed to load admin summary" })
   }
 })
 

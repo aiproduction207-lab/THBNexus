@@ -29,9 +29,9 @@ function KYC() {
 
   return (
     <Layout>
-      <div style={{ padding: 24 }}>
-        <h1 style={{ marginTop: 0 }}>KYC Verification</h1>
-        <div style={{ maxWidth: 520, background: "#fff", padding: 20, borderRadius: 12 }}>
+      <div style={{ padding: 6 }}>
+        <div style={{ background: "#111827", border: "1px solid #1f2937", borderRadius: 18, padding: 20, maxWidth: 620 }}>
+          <h2 style={{ marginTop: 0 }}>KYC Verification</h2>
           <select value={documentType} onChange={(e) => setDocumentType(e.target.value)} style={inputStyle}>
             <option value="">Select Document Type</option>
             <option value="passport">Passport</option>
@@ -52,7 +52,9 @@ const inputStyle = {
   width: "100%",
   padding: "12px 14px",
   borderRadius: 10,
-  border: "1px solid #cbd5e1"
+  background: "#0b1220",
+  color: "#e5eefc",
+  border: "1px solid #1f2937"
 }
 
 const buttonStyle = {
